@@ -1,0 +1,156 @@
+---
+title: "DevelopingDataProducts_CourseProject1"
+author: "Angela"
+date: "5/18/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup2, echo = FALSE, include = FALSE}
+setwd("~/Documents/ContinuedLearning/Coursera_DataScience/Course9_DevelopingDataProducts")
+library(leaflet)
+library(tidyverse)
+```
+
+Import latitude and longitude of Florida cities from:   https://www.mapsofworld.com/usa/states/florida/lat-long.html   
+Data taken from website on 4/28/2020 at 1:04 PM EST  
+
+```{r import data 1, echo = FALSE, include = FALSE}
+FLLatLng <- read.csv("~/Documents/ContinuedLearning/Coursera_DataScience/Course9_DevelopingDataProducts/Week2/FLLatLng.csv")
+
+#Relabel the columns so they are consistent across data frames
+colnames(FLLatLng)[1:3] <- c("City", "latitude", "longitude")
+
+#Get rid of columns you will not use
+FLLatLng <- FLLatLng[1:3]
+
+#Clean up data so City column matches other dataframes
+FLLatLng$City <- gsub(" city","", FLLatLng$City) #get rid of city
+FLLatLng$City <- gsub(" town","", FLLatLng$City) #get rid of town
+FLLatLng$City <- gsub(" ","", FLLatLng$City) #get rid of extra spaces at end of names
+#Unfortunately this last piece of code also gets rid of space in between names of cities, we will have to alter the other data frames to match this
+```
+
+Import population of Florida cities from:  
+https://www.florida-demographics.com/cities_by_population  
+Data taken from website on 4/28/2020 at 1:07 PM EST  
+Data from this website was extracted from the following sources:  
+
+- United States Census Bureau. Annual Estimates of the Resident Population: April 1, 2010 to July 1, 2018. U.S. Census Bureau, Population Division. Web. May 2019. http://www.census.gov/.  
+- United States Census Bureau. B01001 SEX BY AGE, 2018 American Community Survey 5-Year Estimates. U.S. Census Bureau, American Community Survey Office. Web. 19 December 2019. http://www.census.gov/.  
+
+```{r import data 2, echo = FALSE, include = FALSE}
+FLpopulation <- read.csv("~/Documents/ContinuedLearning/Coursera_DataScience/Course9_DevelopingDataProducts/Week2/FLpopulation.csv")
+
+#Get rid of any ranking with the word TIE and convert to numeric
+FLpopulation$Rank <- as.numeric(gsub("TIE","", FLpopulation$Rank))
+FLpopulation$Rank <- as.numeric(as.character(FLpopulation$Rank))
+
+#Convert population data to numeric (first get rid of commas)
+FLpopulation$Population <- as.numeric(gsub(",","",FLpopulation$Population))
+FLpopulation$Population <- as.numeric(as.character(FLpopulation$Population))
+
+#Get rid of all spaces in City name to match the first data frame
+FLpopulation$City <- gsub(" ","", FLpopulation$City)
+```
+
+Import each city/county from:  
+https://dos.myflorida.com/library-archives/research/florida-information/government/local-resources/citycounty-list/  
+Data taken from website on 4/28/2020 at 1:11 PM EST  
+
+```{r import data 3, echo = FALSE, include = FALSE}
+FLcitycounty <- read.csv("~/Documents/ContinuedLearning/Coursera_DataScience/Course9_DevelopingDataProducts/Week2/FLcitycounty.csv")
+
+#Change column names
+colnames(FLcitycounty)[1:3] <- c("County", "City", "Desc")
+
+#Get rid of garbage columns
+FLcitycounty <- FLcitycounty[1:3]
+
+#Get rid of spaces in City name to match above data frames
+FLcitycounty$City <- gsub(" ","", FLcitycounty$City)
+```
+
+Import stadiums in Florida from:  
+https://en.wikipedia.org/wiki/Sports_teams_in_Florida  
+
+```{r import data 4, echo = FALSE, include = FALSE}
+StadiumsinFL <- read.csv("~/Documents/ContinuedLearning/Coursera_DataScience/Course9_DevelopingDataProducts/Week2/StadiumsinFL.csv")
+
+#The symbol column contains links to the logos but we'll need to convert this into the proper code for leaflet to read
+
+NHL <- makeIcon(
+    iconUrl = "https://www-league.nhlstatic.com/images/logos/league-dark/133-flat.svg",
+    iconWidth = 31*215/230,
+    iconHeight = 31, 
+    iconAnchorY = 16,
+    iconAnchorX = 31*215/230/2)
+MLB <- makeIcon(
+    iconUrl = "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg",
+    iconWidth = 31*215/230,
+    iconHeight = 31, 
+    iconAnchorY = 16,
+    iconAnchorX = 31*215/230/2)
+MLS <-makeIcon(
+    iconUrl = "https://league-mp7static.mlsdigital.net/styles/non-retina_desktop_logo/s3/logo25-77x77_0.png?LzMdhn2DU4GXKEjKfJ2QYWMaQKQIk7VQ&itok=ZtYZ58tI",
+    iconWidth = 31*215/230,
+    iconHeight = 31, 
+    iconAnchorY = 16,
+    iconAnchorX = 31*215/230/2)
+NBA <-makeIcon(
+    iconUrl = "https://seeklogo.net/wp-content/uploads/2014/09/NBA-logo.png",
+    iconWidth = 31*215/230,
+    iconHeight = 31, 
+    iconAnchorY = 16,
+    iconAnchorX = 31*215/230/2)
+NFL <-makeIcon(
+    iconUrl = "https://static.nfl.com/static/content/public/static/wildcat/assets/img/application-shell/shield/default.svg",
+    iconWidth = 31*215/230,
+    iconHeight = 31, 
+    iconAnchorY = 16,
+    iconAnchorX = 31*215/230/2)
+
+myIconList2 <- iconList(NHL= NHL,
+                    MLB = MLB, 
+                    MLS = MLS,
+                    NBA = NBA,
+                    NFL = NFL)
+myIconList <- iconList(MLB, NHL, NFL, NBA, MLS, MLB, NBA, NFL, NFL, MLS, NHL)
+class(myIconList) <- "leaflet_icon_set"
+```
+
+Combine all dataframes into one
+
+```{r combine datasets, echo = FALSE, include = FALSE}
+#Want all city columns to be character so you can combine datasets easily 
+FLLatLng$City <- as.character(FLLatLng$City)
+FLpopulation$City <- as.character(FLpopulation$City)
+FLcitycounty$City <- as.character(FLcitycounty$City)
+
+#begin combining data frames and get rid of NA values
+FLdata <- FLLatLng %>% 
+    left_join(FLpopulation, by = "City") %>%
+    left_join(FLcitycounty, by = "City") 
+FLdata <- filter(FLdata, !is.na(FLdata$Rank))
+FLdata <- filter(FLdata, !is.na(FLdata$County))
+FLdata_test <- FLdata[2:3]
+```
+
+##Map of all Florida cities and major sports teams
+
+```{r map 2, warning = FALSE, message = FALSE, echo = FALSE, include = TRUE}
+FLdata <- arrange(FLdata, desc(Population))
+
+FLdata_popup <- paste(FLdata$City, FLdata$Population, sep=": Population is ")
+
+FLdata %>%
+    leaflet() %>%
+    addTiles() %>%
+    addCircles(weight = 1, radius = sqrt(FLdata$Population)*40, popup = FLdata_popup) %>%
+    addMarkers(lat = StadiumsinFL$Latitude, lng = StadiumsinFL$Longitude, icon = myIconList2[StadiumsinFL$League])
+```
+
+
